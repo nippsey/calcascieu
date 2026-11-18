@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1f24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calcasieu">
+<title>Calcasieu Conditions</title>
+<style>
+:root{--bg:#0b1f24;--card:#12303a;--line:#1f4652;--tx:#e8f3f4;--mut:#8fb0b6;--go:#3ecf8e;--fair:#f2c14e;--skip:#ef6b5b;--acc:#59c3d8}
+@media (prefers-color-scheme:light){:root{--bg:#eef5f6;--card:#fff;--line:#d3e2e5;--tx:#10262b;--mut:#587279;--go:#12935c;--fair:#b9850a;--skip:#c7412f;--acc:#12788f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 12px calc(24px + env(safe-area-inset-bottom))}
+main{max-width:640px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 2px 8px}
+h1{font-size:18px;margin:0}
+.sub{color:var(--mut);font-size:12px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.refresh{border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:6px 0}
+.seg button{flex:1;padding:8px;font-size:14px;color:var(--mut)}
+.seg button.on{background:var(--acc);color:#04181d;font-weight:600}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+.card h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 10px;font-weight:600}
+.hero{display:flex;gap:16px;align-items:center}
+.ring{width:96px;height:96px;flex:none;position:relative}
+.ring svg{width:96px;height:96px;transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px}
+.verdict{font-size:22px;font-weight:700}
+.go{color:var(--go)}.fair{color:var(--fair)}.skip{color:var(--skip)}
+ul.why{margin:6px 0 0;padding-left:18px;font-size:14px}
+ul.why li{margin:2px 0}
+.win{font-size:20px;font-weight:700}
+.alert{background:#5a1e17;color:#ffd9d3;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px}
+.strip{display:flex;gap:4px;overflow-x:auto;padding-bottom:6px}
+.hr{flex:none;width:38px;text-align:center;font-size:11px;color:var(--mut)}
+.hr .bar{height:70px;display:flex;align-items:flex-end;margin:3px 0}
+.hr .bar i{display:block;width:100%;border-radius:4px 4px 0 0}
+.hr .w{color:var(--tx);font-size:12px;font-weight:600}
+.hr.night{opacity:.45}
+.g{background:var(--go)}.f{background:var(--fair)}.s{background:var(--skip)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:6px 2px;text-align:left;border-bottom:1px solid var(--line)}
+th{font-size:11px;color:var(--mut);font-weight:600}
+td.n,th.n{text-align:right}
+tr:last-child td{border-bottom:0}
+.big{font-size:26px;font-weight:700}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kv div span{display:block;font-size:12px;color:var(--mut)}
+.foot{font-size:12px;color:var(--mut);margin-top:14px}
+.foot code{font-size:11px}
+.dim{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><h1>Calcasieu Conditions</h1><div class="sub" id="upd">Loading…</div></div>
+  <button class="refresh" id="refresh">Refresh</button>
+</header>
+
+<div class="row2">
+  <div class="seg" id="modeSeg"><button data-m="lake" class="on">Lake / Marsh</button><button data-m="gulf">Gulf</button></div>
+  <div class="seg" id="gearSeg"><button data-g="fly" class="on">Fly 6wt</button><button data-g="conv">Conv.</button></div>
+</div>
+
+<div id="alerts"></div>
+
+<section class="card">
+  <div class="hero">
+    <div class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--line)" stroke-width="3.5"/><circle id="arc" cx="18" cy="18" r="15.9" fill="none" stroke="var(--go)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="0 100"/></svg><b id="score">–</b></div>
+    <div><div class="verdict" id="verdict">–</div><div class="sub">Now through the next few hours</div><ul class="why" id="why"></ul></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Best window (daylight, next 24 h)</h2>
+  <div class="win" id="win">–</div>
+  <div class="sub" id="winWhy"></div>
+</section>
+
+<section class="card">
+  <h2>Hourly outlook · wind mph</h2>
+  <div class="strip" id="strip"></div>
+  <div class="sub">Bar height = score. Dimmed = dark.</div>
+</section>
+
+<section class="card">
+  <h2>Tide &amp; current</h2>
+  <div class="kv" id="tideNow"></div>
+  <table style="margin-top:10px"><thead><tr><th>Next tides · Calcasieu Pass</th><th class="n">Time</th><th class="n">Ft MLLW</th></tr></thead><tbody id="tides"></tbody></table>
+</section>
+
+<section class="card">
+  <h2>Water · salinity &amp; temperature</h2>
+  <table><thead><tr><th>Station</th><th class="n">Salinity ppt</th><th class="n">6 h</th><th class="n">Temp °F</th></tr></thead><tbody id="water"></tbody></table>
+  <div class="sub" style="margin-top:8px">Salinity is converted from specific conductance where the gauge does not report it directly.</div>
+</section>
+
+<section class="card">
+  <h2>Wind, seas, air</h2>
+  <div class="kv" id="wx"></div>
+</section>
+
+<div class="foot" id="foot"></div>
+</main>
+
+<script>
+/* ---------- config ---------- */
+const TZ = 'America/Chicago';
+const LAT = 29.9, LON = -93.3;       // Calcasieu Lake
+const GLAT = 29.45, GLON = -93.35;   // nearshore Gulf off Calcasieu Pass
+const TIDE_STN = '8768094';          // Calcasieu Pass, LA
+const TIDE_ALT = '8767816';          // Lake Charles, Calcasieu River
+const PORTS_STN = 'lc0101';          // Calcasieu Channel LB 36 (PORTS)
+const USGS = {
+  '08017110': 'Lake · NW of Cameron',
+  '300127093184900': 'Lake · NE of Hackberry',
+  '295836093200702': 'Channel · S of Hackberry',
+  '08017034': 'Salt barrier · Lake Charles'
+};
+const LAKE_PRIMARY = ['08017110', '300127093184900', '295836093200702'];
+
+/* ---------- helpers (pure) ---------- */
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (x, x0, x1, y0, y1) => y0 + (clamp(x, x0, x1) - x0) * (y1 - y0) / (x1 - x0);
+
+function tzOffsetMs(ms) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {timeZone: TZ, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'})
+    .formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(ms / 1000) * 1000;
+}
+function chiToDate(s) {                       // "YYYY-MM-DD HH:mm" or ISO-no-offset, Central local
+  const [d, t] = s.replace(' ', 'T').split('T');
+  const [y, m, da] = d.split('-').map(Number);
+  const [h, mi] = t.split(':').map(Number);
+  const base = Date.UTC(y, m - 1, da, h, mi);
+  let g = base - tzOffsetMs(base);
+  g = base - tzOffsetMs(g);
+  return new Date(g);
+}
+const fmtTime = d => d.toLocaleTimeString('en-US', {timeZone: TZ, hour: 'numeric', minute: '2-digit'});
+const fmtHour = d => d.toLocaleTimeString('en-US', {timeZone: TZ, hour: 'numeric'}).replace(' ', '').toLowerCase();
+const fmtDay = d => d.toLocaleDateString('en-US', {timeZone: TZ, weekday: 'short'});
+const compass = deg => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(((deg % 360) / 22.5)) % 16];
+const cToF = c => c * 9 / 5 + 32;
+const num = (x, d = 1) => (x == null || isNaN(x)) ? '–' : (+x).toFixed(d);
+
+// Practical Salinity Scale 1978 from conductivity at 25 C (uS/cm)
+function salinityFromC25(c25) {
+  const R = c25 / 42914; if (!(R > 0)) return null;
+  const r = Math.sqrt(R);
+  const s = 0.008 - 0.1692 * r + 25.3851 * R + 14.0941 * R * r - 7.0261 * R * R + 2.7081 * R * R * r;
+  return s < 0 ? 0 : s;
+}
+
+/* ---------- scoring (pure) ---------- */
+function windScore(speed, gust, gear) {
+  const k = gear === 'conv' ? 1.3 : 1;
+  const eff = Math.max(speed, 0.7 * gust) / k;
+  if (eff <= 7) return 100;
+  if (eff <= 12) return lerp(eff, 7, 12, 100, 70);
+  if (eff <= 18) return lerp(eff, 12, 18, 70, 35);
+  return lerp(eff, 18, 28, 35, 0);
+}
+function waveScore(ft) { return ft <= 2 ? 100 : ft <= 4 ? lerp(ft, 2, 4, 100, 50) : lerp(ft, 4, 7, 50, 0); }
+function salMult(s) {
+  if (s == null) return 1;
+  if (s < 2) return .5; if (s < 5) return lerp(s, 2, 5, .6, .85); if (s < 8) return lerp(s, 5, 8, .85, 1);
+  if (s <= 22) return 1; return .95;
+}
+function tempMult(f) {
+  if (f == null) return 1;
+  if (f < 50) return .7; if (f < 58) return lerp(f, 50, 58, .7, 1); if (f <= 86) return 1; return .85;
+}
+function tideMoveScore(t, events) {           // 0 at slack, 100 at mid-swing
+  if (!events || events.length < 2) return 60;
+  let prev = null, next = null;
+  for (const e of events) { if (e.t <= t) prev = e; else { next = e; break; } }
+  if (!prev || !next) return 60;
+  return 100 * Math.sin(Math.PI * (t - prev.t) / (next.t - prev.t));
+}
+function hourScore(h, ctx) {
+  const w = windScore(h.wind, h.gust, ctx.gear);
+  const rain = 100 - clamp(h.pop || 0, 0, 100) * 0.5;
+  const tide = tideMoveScore(h.time.getTime(), ctx.tides);
+  let base;
+  if (ctx.mode === 'gulf') {
+    const wv = h.wave == null ? 70 : waveScore(h.wave);
+    base = 0.35 * w + 0.35 * wv + 0.15 * tide + 0.15 * rain;
+    return clamp(base * tempMult(ctx.waterF), 0, 100);
+  }
+  base = 0.55 * w + 0.25 * tide + 0.20 * rain;
+  return clamp(base * salMult(ctx.sal) * tempMult(ctx.waterF), 0, 100);
+}
+function verdictOf(s) { return s >= 70 ? ['Go', 'go'] : s >= 45 ? ['Fair', 'fair'] : ['Skip', 'skip']; }
+function bestWindow(hours, len = 3) {
+  let best = null;
+  for (let i = 0; i + len <= hours.length; i++) {
+    const seg = hours.slice(i, i + len);
+    if (!seg.every(h => h.day)) continue;
+    const avg = seg.reduce((a, h) => a + h.score, 0) / len;
+    if (!best || avg > best.avg) best = {avg, start: seg[0].time, end: new Date(seg[len - 1].time.getTime() + 3600e3), seg};
+  }
+  return best;
+}
+function reasons(ctx, nowH, hours) {
+  const out = [];
+  const nxt = hours.slice(0, 6);
+  const maxW = Math.max(...nxt.map(h => Math.max(h.wind, 0.7 * h.gust)));
+  out.push(`Wind ${num(nowH.wind, 0)} mph ${compass(nowH.wdir)}, gusts ${num(nowH.gust, 0)} · ${maxW > 15 ? 'building to ' + num(maxW, 0) : 'steady next 6 h'}`);
+  if (ctx.mode === 'gulf' && nowH.wave != null) out.push(`Seas ${num(nowH.wave, 1)} ft @ ${num(nowH.period, 0)} s`);
+  if (ctx.mode !== 'gulf') {
+    if (ctx.sal == null) out.push('Salinity unavailable');
+    else out.push(`Lake salinity ~${num(ctx.sal, 1)} ppt · ${ctx.sal < 5 ? 'low, fish pushed toward the Gulf' : ctx.sal > 22 ? 'very salty' : 'in the trout range'}`);
+  }
+  if (ctx.waterF != null) out.push(`Water ${num(ctx.waterF, 0)}°F`);
+  const mv = tideMoveScore(nowH.time.getTime(), ctx.tides);
+  if (ctx.tides && ctx.tides.length) out.push(mv > 60 ? 'Water moving' : mv > 30 ? 'Tide easing toward slack' : 'Near slack tide');
+  if (nowH.pop >= 40) out.push(`Rain chance ${num(nowH.pop, 0)}%`);
+  return out;
+}
+
+/* ---------- fetching ---------- */
+const state = {mode: 'lake', gear: 'fly', data: null};
+try { Object.assign(state, JSON.parse(localStorage.getItem('calc_prefs') || '{}')); } catch (e) {}
+
+async function getJSON(url) {
+  const r = await fetch(url, {cache: 'no-store'});
+  if (!r.ok) throw new Error(r.status + ' ' + url.split('?')[0]);
+  return r.json();
+}
+const coops = (station, product, extra = '') =>
+  `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=${station}&product=${product}&units=english&time_zone=lst_ldt&format=json&application=calcasieu_conditions${extra}`;
+const ymd = d => d.toLocaleDateString('en-CA', {timeZone: TZ}).replace(/-/g, '');
+
+async function loadAll() {
+  const now = new Date();
+  const end = new Date(now.getTime() + 3 * 864e5), beg = new Date(now.getTime() - 864e5);
+  const jobs = {
+    wx: getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation_probability,pressure_msl&daily=sunrise,sunset&wind_speed_unit=mph&temperature_unit=fahrenheit&timezone=${encodeURIComponent(TZ)}&forecast_days=3&past_hours=6`),
+    marine: getJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${GLAT}&longitude=${GLON}&hourly=wave_height,wave_period,wave_direction&length_unit=imperial&timezone=${encodeURIComponent(TZ)}&forecast_days=3`),
+    alerts: getJSON(`https://api.weather.gov/alerts/active?point=${LAT},${LON}`),
+    pred: getJSON(coops(TIDE_STN, 'predictions', `&datum=MLLW&interval=hilo&begin_date=${ymd(beg)}&end_date=${ymd(end)}`)),
+    wl: getJSON(coops(TIDE_STN, 'water_level', '&datum=MLLW&range=6')).catch(() => getJSON(coops(TIDE_ALT, 'water_level', '&datum=MLLW&range=6'))),
+    cur: getJSON(coops(PORTS_STN, 'currents', '&date=latest')),
+    pTemp: getJSON(coops(PORTS_STN, 'water_temperature', '&date=latest')),
+    pCond: getJSON(coops(PORTS_STN, 'conductivity', '&date=latest')),
+    usgs: getJSON(`https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${Object.keys(USGS).join(',')}&period=PT12H&siteStatus=all`)
+  };
+  const keys = Object.keys(jobs);
+  const res = await Promise.allSettled(Object.values(jobs));
+  const out = {errors: {}};
+  res.forEach((r, i) => { if (r.status === 'fulfilled') out[keys[i]] = r.value; else out.errors[keys[i]] = String(r.reason && r.reason.message || r.reason); });
+  out.fetched = new Date();
+  return out;
+}
+
+/* ---------- parsing ---------- */
+function parseUSGS(j) {
+  const sites = {};
+  if (!j || !j.value) return sites;
+  for (const ts of j.value.timeSeries || []) {
+    const id = ts.sourceInfo.siteCode[0].value;
+    const code = ts.variable.variableCode[0].value;
+    const nodata = ts.variable.noDataValue;
+    const vals = ((ts.values[0] || {}).value || []).map(v => ({t: new Date(v.dateTime), v: parseFloat(v.value)}))
+      .filter(v => isFinite(v.v) && v.v !== nodata && v.v > -9999);
+    if (!vals.length) continue;
+    (sites[id] = sites[id] || {})[code] = vals;
+  }
+  return sites;
+}
+function siteSummary(s) {
+  if (!s) return null;
+  const last = a => a ? a[a.length - 1] : null;
+  const ago = (a, h) => { if (!a) return null; const tgt = last(a).t.getTime() - h * 3600e3; return a.reduce((b, x) => Math.abs(x.t - tgt) < Math.abs(b.t - tgt) ? x : b, a[0]); };
+  let salSeries = s['00480'] || s['90860'];
+  if (!salSeries && s['00095']) salSeries = s['00095'].map(p => ({t: p.t, v: salinityFromC25(p.v)})).filter(p => p.v != null);
+  const tempC = s['00010'];
+  const sal = last(salSeries), sal6 = ago(salSeries, 6);
+  return {
+    sal: sal ? sal.v : null, salT: sal ? sal.t : null,
+    salDelta: sal && sal6 && sal6 !== sal ? sal.v - sal6.v : null,
+    tempF: tempC ? cToF(last(tempC).v) : null,
+    gage: s['00065'] ? last(s['00065']).v : null
+  };
+}
+function parseTides(pred) {
+  return ((pred && pred.predictions) || []).map(p => ({t: chiToDate(p.t).getTime(), v: +p.v, type: p.type}));
+}
+function lastRow(j) { const a = j && j.data; return a && a.length ? a[a.length - 1] : null; }
+
+function buildHours(d) {
+  const w = d.wx && d.wx.hourly; if (!w) return [];
+  const m = d.marine && d.marine.hourly;
+  const mi = {}; if (m) m.time.forEach((t, i) => mi[t] = i);
+  const sun = (d.wx.daily.sunrise || []).map((r, i) => [chiToDate(r).getTime(), chiToDate(d.wx.daily.sunset[i]).getTime()]);
+  return w.time.map((t, i) => {
+    const time = chiToDate(t), ms = time.getTime();
+    const mid = ms + 1800e3;
+    const day = sun.some(([a, b]) => mid >= a - 1800e3 && mid <= b);
+    const k = mi[t];
+    return {time, temp: w.temperature_2m[i], wind: w.wind_speed_10m[i], gust: w.wind_gusts_10m[i], wdir: w.wind_direction_10m[i],
+      pop: w.precipitation_probability[i], press: w.pressure_msl[i], day,
+      wave: k != null ? m.wave_height[k] : null, period: k != null ? m.wave_period[k] : null, wavedir: k != null ? m.wave_direction[k] : null};
+  });
+}
+
+/* ---------- render ---------- */
+function compute() {
+  const d = state.data; if (!d) return null;
+  const hoursAll = buildHours(d);
+  const nowMs = Date.now();
+  const tides = parseTides(d.pred);
+  const usgs = parseUSGS(d.usgs);
+  const sums = {}; for (const id of Object.keys(USGS)) sums[id] = siteSummary(usgs[id]);
+  const lakeSals = LAKE_PRIMARY.map(id => sums[id] && sums[id].sal).filter(v => v != null);
+  const sal = lakeSals.length ? lakeSals.reduce((a, b) => a + b, 0) / lakeSals.length : null;
+  const temps = Object.values(sums).map(s => s && s.tempF).filter(v => v != null);
+  const pt = lastRow(d.pTemp);
+  const waterF = temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : (pt ? +pt.v : null);
+  const ctx = {mode: state.mode, gear: state.gear, tides, sal, waterF};
+  const hours = hoursAll.filter(h => h.time.getTime() >= nowMs - 3600e3).slice(0, 36);
+  hours.forEach(h => h.score = hourScore(h, ctx));
+  return {hoursAll, hours, ctx, sums, tides, d};
+}
+
+function render() {
+  const c = compute(); if (!c) return;
+  const {hours, ctx, sums, tides, d} = c;
+  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === state.mode));
+  document.querySelectorAll('#gearSeg button').forEach(b => b.classList.toggle('on', b.dataset.g === state.gear));
+  $('upd').textContent = 'Updated ' + fmtTime(d.fetched) + ' · ' + fmtDay(d.fetched);
+
+  // alerts
+  const al = ((d.alerts && d.alerts.features) || []).map(f => f.properties).filter(p => /Wind|Marine|Gale|Small Craft|Flood|Storm|Tornado|Hurricane|Fog|Thunder|Surge|Advisory|Warning|Watch/i.test(p.event));
+  $('alerts').innerHTML = al.slice(0, 3).map(p => `<div class="alert"><b>${esc(p.event)}</b> — ${esc(p.headline || '')}</div>`).join('');
+
+  if (!hours.length) { $('verdict').textContent = 'No forecast'; $('why').innerHTML = '<li>Weather feed unavailable</li>'; }
+  else {
+    const nowH = hours.find(h => h.time.getTime() + 3600e3 > Date.now()) || hours[0];
+    const near = hours.slice(hours.indexOf(nowH), hours.indexOf(nowH) + 3);
+    const sc = near.reduce((a, h) => a + h.score, 0) / near.length;
+    const [v, cls] = verdictOf(sc);
+    $('score').textContent = Math.round(sc);
+    $('verdict').textContent = v; $('verdict').className = 'verdict ' + cls;
+    const arc = $('arc'); arc.setAttribute('stroke-dasharray', `${sc} 100`); arc.setAttribute('stroke', `var(--${cls})`);
+    $('why').innerHTML = reasons(ctx, nowH, hours.slice(hours.indexOf(nowH))).map(x => `<li>${esc(x)}</li>`).join('');
+
+    const fut = hours.slice(hours.indexOf(nowH), hours.indexOf(nowH) + 24);
+    const bw = bestWindow(fut);
+    if (bw) {
+      $('win').textContent = `${fmtDay(bw.start)} ${fmtHour(bw.start)} – ${fmtHour(bw.end)}`;
+      const avgW = bw.seg.reduce((a, h) => a + h.wind, 0) / bw.seg.length;
+      $('winWhy').textContent = `Score ${Math.round(bw.avg)} · wind ~${num(avgW, 0)} mph ${compass(bw.seg[1].wdir)}`;
+    } else { $('win').textContent = 'No good daylight window'; $('winWhy').textContent = ''; }
+
+    $('strip').innerHTML = fut.map(h => {
+      const cl = h.score >= 70 ? 'g' : h.score >= 45 ? 'f' : 's';
+      return `<div class="hr ${h.day ? '' : 'night'}"><div class="w">${num(h.wind, 0)}</div><div class="bar"><i class="${cl}" style="height:${Math.max(6, h.score)}%"></i></div>${fmtHour(h.time)}</div>`;
+    }).join('');
+  }
+
+  // tide & current
+  const now = Date.now();
+  const up = tides.filter(t => t.t > now).slice(0, 4);
+  $('tides').innerHTML = up.length ? up.map(t => `<tr><td>${t.type === 'H' ? 'High' : 'Low'}</td><td class="n">${fmtDay(new Date(t.t))} ${fmtTime(new Date(t.t))}</td><td class="n">${num(t.v, 2)}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="dim">Tide predictions unavailable</td></tr>';
+  const wl = d.wl && d.wl.data || [];
+  let trend = '–';
+  if (wl.length > 3) { const a = +wl[wl.length - 1].v, b = +wl[Math.max(0, wl.length - 11)].v; const dd = a - b; trend = Math.abs(dd) < 0.04 ? 'steady' : dd > 0 ? 'rising' : 'falling'; }
+  const cur = lastRow(d.cur);
+  const curSpd = cur ? +(cur.s != null ? cur.s : cur.Speed) : null;
+  const curDir = cur ? +(cur.d != null ? cur.d : cur.Direction) : null;
+  const flood = 82, flowing = curDir == null ? '' : (Math.abs(((curDir - flood + 540) % 360) - 180) < 90 ? 'incoming' : 'outgoing');
+  $('tideNow').innerHTML = `
+    <div><span>Water level (obs)</span><b class="big">${wl.length ? num(wl[wl.length - 1].v, 2) : '–'}</b> ft<br><span>${trend}</span></div>
+    <div><span>Ship channel current</span><b class="big">${curSpd != null && !isNaN(curSpd) ? num(curSpd, 1) : '–'}</b> kt<br><span>${flowing}</span></div>`;
+
+  // water table
+  $('water').innerHTML = Object.keys(USGS).map(id => {
+    const s = sums[id];
+    if (!s) return `<tr><td>${USGS[id]}</td><td class="n dim" colspan="3">no data</td></tr>`;
+    const arrow = s.salDelta == null ? '–' : Math.abs(s.salDelta) < 0.3 ? '→' : s.salDelta > 0 ? '↑ ' + num(s.salDelta, 1) : '↓ ' + num(-s.salDelta, 1);
+    return `<tr><td>${USGS[id]}</td><td class="n">${num(s.sal, 1)}</td><td class="n">${arrow}</td><td class="n">${num(s.tempF, 0)}</td></tr>`;
+  }).join('');
+  const pc = lastRow(d.pCond), pt = lastRow(d.pTemp);
+  if (pc) {
+    const tF = pt ? +pt.v : null;
+    let cond = +pc.v * 1000; if (tF != null) cond = cond / (1 + 0.02 * ((tF - 32) * 5 / 9 - 25));
+    $('water').innerHTML += `<tr><td>Channel · LB 36 (NOAA)</td><td class="n">${num(salinityFromC25(cond), 1)}</td><td class="n">–</td><td class="n">${num(tF, 0)}</td></tr>`;
+  }
+
+  // wx now
+  const nh = hours.find(h => h.time.getTime() + 3600e3 > Date.now());
+  if (nh) {
+    const prior = c.hoursAll.find(h => h.time.getTime() === nh.time.getTime() - 3 * 3600e3);
+    const pd = prior ? nh.press - prior.press : null;
+    $('wx').innerHTML = `
+      <div><span>Wind</span><b class="big">${num(nh.wind, 0)}</b> mph ${compass(nh.wdir)}<br><span>gusts ${num(nh.gust, 0)}</span></div>
+      <div><span>Gulf seas</span><b class="big">${nh.wave != null ? num(nh.wave, 1) : '–'}</b> ft<br><span>${nh.period != null ? num(nh.period, 0) + ' s ' + compass(nh.wavedir) : ''}</span></div>
+      <div><span>Air</span><b class="big">${num(nh.temp, 0)}</b> °F<br><span>rain chance ${num(nh.pop, 0)}%</span></div>
+      <div><span>Pressure</span><b class="big">${num(nh.press * 0.02953, 2)}</b> inHg<br><span>${pd == null ? '' : Math.abs(pd) < 0.8 ? 'steady' : pd > 0 ? 'rising' : 'falling'} (3 h)</span></div>`;
+  }
+
+  const errs = Object.entries(d.errors);
+  $('foot').innerHTML = (errs.length ? `<b>Feeds down:</b> ${errs.map(e => e[0]).join(', ')}. Score uses what is available.<br>` : '') +
+    `Sources: NOAA CO-OPS (tides, PORTS channel), USGS NWIS (salinity, temp), Open-Meteo (forecast, seas), NWS (alerts). The score is a rule of thumb for speckled trout, not a guarantee. Wind-driven water level can override predicted tides.`;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const $ = id => document.getElementById(id);
+
+async function refresh() {
+  $('upd').textContent = 'Loading…';
+  try { state.data = await loadAll(); render(); }
+  catch (e) { $('upd').textContent = 'Load failed: ' + e.message; }
+}
+if (typeof document !== 'undefined' && document.getElementById('refresh')) {
+  $('refresh').onclick = refresh;
+  $('modeSeg').onclick = e => { const m = e.target.dataset.m; if (m) { state.mode = m; save(); render(); } };
+  $('gearSeg').onclick = e => { const g = e.target.dataset.g; if (g) { state.gear = g; save(); render(); } };
+  function save() { try { localStorage.setItem('calc_prefs', JSON.stringify({mode: state.mode, gear: state.gear})); } catch (e) {} }
+  refresh();
+  setInterval(refresh, 15 * 60e3);
+}
+</script>
+</body>
+</html>
