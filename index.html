@@ -237,6 +237,33 @@ const coops = (station, product, extra = '') =>
   `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=${station}&product=${product}&units=english&time_zone=lst_ldt&format=json&application=calcasieu_conditions${extra}`;
 const ymd = d => d.toLocaleDateString('en-CA', {timeZone: TZ}).replace(/-/g, '');
 
+async function firstWithData(product, stations) {
+  const errs = [];
+  for (const s of stations) {
+    try {
+      const j = await getJSON(coops(s, product, '&date=latest'));
+      if (j.data && j.data.length) { j.station = s; return j; }
+      errs.push(s + ': ' + ((j.error && j.error.message) || 'no data'));
+    } catch (e) { errs.push(s + ': ' + e.message); }
+  }
+  throw new Error(errs.join(' | '));
+}
+// USGS: search the whole estuary box for active salinity/conductance/temperature gauges, plus my known IDs
+async function loadUSGS() {
+  const base = 'https://waterservices.usgs.gov/nwis/iv/?format=json&period=PT12H&siteStatus=active';
+  const urls = [
+    base + '&bBox=-93.50,29.70,-93.10,30.25&parameterCd=00095,00480,90860,00010',
+    base.replace('active', 'all') + '&sites=' + Object.keys(USGS).join(',')
+  ];
+  const ts = [], msgs = [];
+  for (const u of urls) {
+    try { const j = await getJSON(u); ts.push(...((j.value && j.value.timeSeries) || [])); }
+    catch (e) { msgs.push(e.message); }
+  }
+  if (!ts.length && msgs.length) throw new Error(msgs.join('; '));
+  return {value: {timeSeries: ts}};
+}
+
 async function loadAll() {
   const now = new Date();
   const end = new Date(now.getTime() + 3 * 864e5), beg = new Date(now.getTime() - 864e5);
@@ -247,9 +274,9 @@ async function loadAll() {
     pred: getJSON(coops(TIDE_STN, 'predictions', `&datum=MLLW&interval=hilo&begin_date=${ymd(beg)}&end_date=${ymd(end)}`)),
     wl: getJSON(coops(TIDE_STN, 'water_level', '&datum=MLLW&range=6')).catch(() => getJSON(coops(TIDE_ALT, 'water_level', '&datum=MLLW&range=6'))),
     cur: getJSON(coops(PORTS_STN, 'currents', '&date=latest')),
-    pTemp: getJSON(coops(PORTS_STN, 'water_temperature', '&date=latest')),
-    pCond: getJSON(coops(PORTS_STN, 'conductivity', '&date=latest')),
-    usgs: getJSON(`https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${Object.keys(USGS).join(',')}&period=PT12H&siteStatus=all`)
+    pTemp: firstWithData('water_temperature', [PORTS_STN, '8768094', '8767816', '8767961']),
+    pCond: firstWithData('conductivity', [PORTS_STN, '8768094', '8767816', '8767961']),
+    usgs: loadUSGS()
   };
   const keys = Object.keys(jobs);
   const res = await Promise.allSettled(Object.values(jobs));
@@ -270,12 +297,15 @@ function parseUSGS(j) {
     const vals = ((ts.values[0] || {}).value || []).map(v => ({t: new Date(v.dateTime), v: parseFloat(v.value)}))
       .filter(v => isFinite(v.v) && v.v !== nodata && v.v > -9999);
     if (!vals.length) continue;
-    (sites[id] = sites[id] || {})[code] = vals;
+    const g = ts.sourceInfo.geoLocation && ts.sourceInfo.geoLocation.geogLocation || {};
+    const site = sites[id] = sites[id] || {name: ts.sourceInfo.siteName, lat: +g.latitude || 0, lon: +g.longitude || 0, p: {}};
+    if (!site.p[code] || vals.length > site.p[code].length) site.p[code] = vals;
   }
   return sites;
 }
-function siteSummary(s) {
-  if (!s) return null;
+function siteSummary(site) {
+  if (!site) return null;
+  const s = site.p;
   const last = a => a ? a[a.length - 1] : null;
   const ago = (a, h) => { if (!a) return null; const tgt = last(a).t.getTime() - h * 3600e3; return a.reduce((b, x) => Math.abs(x.t - tgt) < Math.abs(b.t - tgt) ? x : b, a[0]); };
   let salSeries = s['00480'] || s['90860'];
@@ -317,21 +347,24 @@ function compute() {
   const nowMs = Date.now();
   const tides = parseTides(d.pred);
   const usgs = parseUSGS(d.usgs);
-  const sums = {}; for (const id of Object.keys(USGS)) sums[id] = siteSummary(usgs[id]);
-  const lakeSals = LAKE_PRIMARY.map(id => sums[id] && sums[id].sal).filter(v => v != null);
+  const fresh = t => t && (nowMs - t.getTime()) < 6 * 3600e3;
+  const sites = Object.entries(usgs).map(([id, s]) => ({id, name: USGS[id] || shortName(s.name), lat: s.lat, lon: s.lon, codes: Object.keys(s.p), sum: siteSummary(s)}))
+    .sort((a, b) => b.lat - a.lat);
+  const lakeSals = sites.filter(x => x.sum && x.sum.sal != null && fresh(x.sum.salT) && x.lat < 30.12).map(x => x.sum.sal);
   const sal = lakeSals.length ? lakeSals.reduce((a, b) => a + b, 0) / lakeSals.length : null;
-  const temps = Object.values(sums).map(s => s && s.tempF).filter(v => v != null);
+  const temps = sites.filter(x => x.sum && x.sum.tempF != null && x.lat < 30.12).map(x => x.sum.tempF);
   const pt = lastRow(d.pTemp);
   const waterF = temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : (pt ? +pt.v : null);
   const ctx = {mode: state.mode, gear: state.gear, tides, sal, waterF};
   const hours = hoursAll.filter(h => h.time.getTime() >= nowMs - 3600e3).slice(0, 36);
   hours.forEach(h => h.score = hourScore(h, ctx));
-  return {hoursAll, hours, ctx, sums, tides, d};
+  return {hoursAll, hours, ctx, sites, tides, d};
 }
+const shortName = n => String(n || 'Unnamed gauge').replace(/\s*,?\s*LA\.?$/i, '').replace(/\bCalcasieu\b/ig, 'Calc.').slice(0, 34);
 
 function render() {
   const c = compute(); if (!c) return;
-  const {hours, ctx, sums, tides, d} = c;
+  const {hours, ctx, sites, tides, d} = c;
   document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === state.mode));
   document.querySelectorAll('#gearSeg button').forEach(b => b.classList.toggle('on', b.dataset.g === state.gear));
   $('upd').textContent = 'Updated ' + fmtTime(d.fetched) + ' · ' + fmtDay(d.fetched);
@@ -382,18 +415,20 @@ function render() {
     <div><span>Ship channel current</span><b class="big">${curSpd != null && !isNaN(curSpd) ? num(curSpd, 1) : '–'}</b> kt<br><span>${flowing}</span></div>`;
 
   // water table
-  $('water').innerHTML = Object.keys(USGS).map(id => {
-    const s = sums[id];
-    if (!s) return `<tr><td>${USGS[id]}</td><td class="n dim" colspan="3">no data</td></tr>`;
+  const rows = sites.filter(x => x.sum && (x.sum.sal != null || x.sum.tempF != null)).map(x => {
+    const s = x.sum, old = s.salT && (Date.now() - s.salT.getTime()) > 6 * 3600e3;
     const arrow = s.salDelta == null ? '–' : Math.abs(s.salDelta) < 0.3 ? '→' : s.salDelta > 0 ? '↑ ' + num(s.salDelta, 1) : '↓ ' + num(-s.salDelta, 1);
-    return `<tr><td>${USGS[id]}</td><td class="n">${num(s.sal, 1)}</td><td class="n">${arrow}</td><td class="n">${num(s.tempF, 0)}</td></tr>`;
-  }).join('');
+    return `<tr><td>${esc(x.name)}${old ? ' <span class="dim">(stale)</span>' : ''}</td><td class="n">${num(s.sal, 1)}</td><td class="n">${arrow}</td><td class="n">${num(s.tempF, 0)}</td></tr>`;
+  });
   const pc = lastRow(d.pCond), pt = lastRow(d.pTemp);
-  if (pc) {
+  if (pc || pt) {
     const tF = pt ? +pt.v : null;
-    let cond = +pc.v * 1000; if (tF != null) cond = cond / (1 + 0.02 * ((tF - 32) * 5 / 9 - 25));
-    $('water').innerHTML += `<tr><td>Channel · LB 36 (NOAA)</td><td class="n">${num(salinityFromC25(cond), 1)}</td><td class="n">–</td><td class="n">${num(tF, 0)}</td></tr>`;
+    let sal = null;
+    if (pc) { let cond = +pc.v * 1000; if (tF != null) cond = cond / (1 + 0.02 * ((tF - 32) * 5 / 9 - 25)); sal = salinityFromC25(cond); }
+    const stn = (d.pCond && d.pCond.station) || (d.pTemp && d.pTemp.station);
+    rows.push(`<tr><td>NOAA ${esc(stn)}</td><td class="n">${num(sal, 1)}</td><td class="n">–</td><td class="n">${num(tF, 0)}</td></tr>`);
   }
+  $('water').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="dim">No active salinity or temperature gauges reporting right now.</td></tr>';
 
   // wx now
   const nh = hours.find(h => h.time.getTime() + 3600e3 > Date.now());
@@ -408,7 +443,9 @@ function render() {
   }
 
   const errs = Object.entries(d.errors);
-  $('foot').innerHTML = (errs.length ? `<b>Feeds down:</b> ${errs.map(e => e[0]).join(', ')}. Score uses what is available.<br>` : '') +
+  const gl = sites.map(x => `${esc(x.name)} [${x.codes.join(',')}]`).join('; ');
+  $('foot').innerHTML = (errs.length ? `<b>Feeds down:</b> ${errs.map(e => esc(e[0] + ' (' + e[1].slice(0, 160) + ')')).join('; ')}. Score uses what is available.<br>` : '') +
+    `<span class="dim">USGS gauges found: ${sites.length}${gl ? ' — ' + gl : ''}</span><br>` +
     `Sources: NOAA CO-OPS (tides, PORTS channel), USGS NWIS (salinity, temp), Open-Meteo (forecast, seas), NWS (alerts). The score is a rule of thumb for speckled trout, not a guarantee. Wind-driven water level can override predicted tides.`;
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
